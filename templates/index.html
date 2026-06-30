@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Social Media Name Checker — Australia</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .spinner {
+      width: 2.5rem; height: 2.5rem;
+      border: 4px solid #e0e7ff;
+      border-top-color: #4f46e5;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .card-border-left { border-left-width: 4px; }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-slate-50 to-indigo-50 min-h-screen">
+
+  <div class="max-w-3xl mx-auto px-4 py-12">
+
+    <!-- Header -->
+    <div class="text-center mb-10">
+      <div class="text-5xl mb-3">🌐</div>
+      <h1 class="text-3xl font-bold text-gray-900">Social Media Name Checker</h1>
+      <p class="text-gray-500 mt-2 text-base">
+        Check username availability across platforms popular with migrants in Australia
+      </p>
+    </div>
+
+    <!-- Search Box -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
+      <div class="flex gap-3">
+        <input
+          id="username-input"
+          type="text"
+          placeholder="e.g. shinehubau"
+          maxlength="50"
+          autocomplete="off"
+          spellcheck="false"
+          class="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-gray-800 text-base focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent placeholder-gray-300"
+        />
+        <button
+          id="check-btn"
+          class="bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold px-7 py-3 rounded-xl transition-colors whitespace-nowrap"
+        >
+          Check
+        </button>
+      </div>
+      <p class="mt-2 text-xs text-gray-400">
+        Letters, numbers, dots, hyphens, and underscores only (max 50 chars).
+        Note: some platforms use different username rules — always double-check on the platform.
+      </p>
+    </div>
+
+    <!-- Loading -->
+    <div id="loading" class="hidden text-center py-12">
+      <div class="spinner"></div>
+      <p class="text-gray-400 mt-3 text-sm">Checking platforms concurrently…</p>
+    </div>
+
+    <!-- Error -->
+    <div id="error-box" class="hidden bg-red-50 border border-red-200 rounded-xl px-5 py-4 mb-6 text-red-700 text-sm"></div>
+
+    <!-- Results -->
+    <div id="results" class="hidden">
+
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold text-gray-700">
+          Results for <span id="results-username" class="text-indigo-600 font-mono font-bold"></span>
+        </h2>
+      </div>
+
+      <!-- Summary chips -->
+      <div id="summary" class="flex flex-wrap gap-2 mb-4"></div>
+
+      <!-- Reliability warning -->
+      <div class="bg-amber-50 border border-amber-200 rounded-xl px-5 py-3 mb-6 text-amber-800 text-xs leading-relaxed">
+        <strong>⚠️ Heads-up:</strong> This tool checks HTTP responses, not official APIs.
+        Bot detection, login walls, and platform changes can cause inaccurate results.
+        Treat <em>Available</em> as a strong hint, not a guarantee — always confirm directly on the platform before committing to a name.
+      </div>
+
+      <!-- Platform cards -->
+      <div id="results-grid" class="grid gap-3 sm:grid-cols-2"></div>
+
+      <!-- Community platforms note -->
+      <div class="mt-6 bg-blue-50 border border-blue-100 rounded-xl px-5 py-4 text-blue-800 text-xs leading-relaxed">
+        <strong>📱 Also check these community-specific platforms</strong> used by migrants in Australia
+        (username availability cannot be automated for these):
+        <ul class="mt-2 space-y-1 list-disc list-inside">
+          <li><strong>WeChat</strong> — dominant in the Chinese community (Australia's largest migrant group)</li>
+          <li><strong>Telegram</strong> — widely used by Indian, Eastern European, and Middle-Eastern communities</li>
+          <li><strong>Viber</strong> — popular with Filipino and Greek communities</li>
+          <li><strong>Line</strong> — common in Southeast Asian communities (Thai, Indonesian)</li>
+          <li><strong>WhatsApp Business</strong> — widely used for community groups across all backgrounds</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const input     = document.getElementById('username-input');
+    const btn       = document.getElementById('check-btn');
+    const loading   = document.getElementById('loading');
+    const errorBox  = document.getElementById('error-box');
+    const results   = document.getElementById('results');
+    const grid      = document.getElementById('results-grid');
+    const summary   = document.getElementById('summary');
+    const nameSpan  = document.getElementById('results-username');
+
+    const STATUS = {
+      available: {
+        label: '✅ Available',
+        chip: 'bg-green-100 text-green-800 border-green-200',
+        card: 'bg-green-50',
+      },
+      taken: {
+        label: '❌ Taken',
+        chip: 'bg-red-100 text-red-800 border-red-200',
+        card: 'bg-red-50',
+      },
+      unknown: {
+        label: '❓ Unknown',
+        chip: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+        card: 'bg-yellow-50',
+      },
+      manual: {
+        label: '👁 Check Manually',
+        chip: 'bg-blue-100 text-blue-800 border-blue-200',
+        card: 'bg-blue-50',
+      },
+      error: {
+        label: '⚠️ Error',
+        chip: 'bg-orange-100 text-orange-800 border-orange-200',
+        card: 'bg-orange-50',
+      },
+    };
+
+    const CONFIDENCE = {
+      high:   '<span class="text-xs bg-green-50 text-green-700 border border-green-200 rounded-full px-2 py-0.5">High confidence</span>',
+      medium: '<span class="text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 rounded-full px-2 py-0.5">Medium confidence</span>',
+      manual: '<span class="text-xs bg-gray-100 text-gray-500 border border-gray-200 rounded-full px-2 py-0.5">Manual only</span>',
+    };
+
+    function esc(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function renderCard(r) {
+      const s = STATUS[r.status] || STATUS.unknown;
+      const conf = CONFIDENCE[r.confidence] || '';
+      return `
+        <div class="bg-white rounded-xl border border-gray-100 card-border-left p-4 flex flex-col gap-2 hover:shadow-sm transition-shadow"
+             style="border-left-color: ${esc(r.color)}">
+          <div class="flex items-start justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="text-xl shrink-0" role="img" aria-label="${esc(r.name)}">${esc(r.emoji)}</span>
+              <span class="font-semibold text-gray-800 text-sm truncate">${esc(r.name)}</span>
+            </div>
+            <span class="text-xs font-medium px-2 py-1 rounded-full border shrink-0 ${s.chip}">${s.label}</span>
+          </div>
+          <p class="text-xs text-gray-500 leading-relaxed">${esc(r.note)}</p>
+          <div class="flex items-center justify-between mt-auto pt-1">
+            ${conf}
+            <a href="${esc(r.profile_url)}" target="_blank" rel="noopener noreferrer"
+               class="text-xs text-indigo-500 hover:text-indigo-700 font-medium ml-auto">
+              View profile →
+            </a>
+          </div>
+        </div>`;
+    }
+
+    function renderSummary(items) {
+      const counts = {};
+      items.forEach(r => { counts[r.status] = (counts[r.status] || 0) + 1; });
+
+      return [
+        { key: 'available', label: 'Available',       cls: 'bg-green-100 text-green-800' },
+        { key: 'taken',     label: 'Taken',            cls: 'bg-red-100 text-red-800' },
+        { key: 'manual',    label: 'Check Manually',   cls: 'bg-blue-100 text-blue-800' },
+        { key: 'unknown',   label: 'Unknown',          cls: 'bg-yellow-100 text-yellow-800' },
+        { key: 'error',     label: 'Error',            cls: 'bg-orange-100 text-orange-800' },
+      ]
+        .filter(i => counts[i.key])
+        .map(i => `<span class="px-3 py-1 rounded-full text-sm font-medium ${i.cls}">${counts[i.key]} ${i.label}</span>`)
+        .join('');
+    }
+
+    async function doCheck() {
+      const username = input.value.trim();
+      if (!username) { input.focus(); return; }
+
+      errorBox.classList.add('hidden');
+      results.classList.add('hidden');
+      loading.classList.remove('hidden');
+      btn.disabled = true;
+      btn.textContent = 'Checking…';
+
+      try {
+        const res = await fetch('/check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username }),
+        });
+        const data = await res.json();
+        loading.classList.add('hidden');
+
+        if (!res.ok || data.error) {
+          errorBox.textContent = data.error || 'An unexpected error occurred.';
+          errorBox.classList.remove('hidden');
+          return;
+        }
+
+        nameSpan.textContent = data.username;
+        summary.innerHTML = renderSummary(data.results);
+        grid.innerHTML = data.results.map(renderCard).join('');
+        results.classList.remove('hidden');
+        results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      } catch {
+        loading.classList.add('hidden');
+        errorBox.textContent = 'Network error — is the Flask server running?';
+        errorBox.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Check';
+      }
+    }
+
+    btn.addEventListener('click', doCheck);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') doCheck(); });
+  </script>
+</body>
+</html>
